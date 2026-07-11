@@ -1,0 +1,28 @@
+[project]
+name = "learnfast"
+version = "0.1.0"
+description = "FastAPI 从零基础到企业级 — 渐进式学习项目"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.139.0",
+    "python-jose[cryptography]>=3.4.0",
+    "passlib[bcrypt]>=1.7.4",
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.0",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.0",
+    "pydantic-settings>=2.5.0",
+    "structlog>=24.0.0",
+]
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
+
+[tool.fastapi]
+entrypoint = "step01_hello_fastapi:app"

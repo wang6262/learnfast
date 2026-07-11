@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LearnFast React — 从零学 React 前端</title>
+  </head>
+  <body>
+    <!--
+      【基础】React 会挂载到这个 div 上
+      id="root" 是约定名称，src/main.jsx 中会获取这个元素
+    -->
+    <div id="root"></div>
+    <!--
+      【基础】加载 JS 入口文件
+      type="module" 表示支持 ES Module (import/export 语法)
+      /src/main.jsx → Vite 会自动编译 JSX 和打包依赖
+    -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

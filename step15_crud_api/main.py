@@ -10,24 +10,32 @@
 #   6. 路由标签分组 — tags=["users"] / tags=["items"] 文档分组
 # 运行方式：uv run python -m step15_crud_api.main
 # ==============================================
+from contextlib import asynccontextmanager
+
 import uvicorn
 
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from . import crud, models, schemas
-from .database import engine, Base, get_db
+import crud, models, schemas
+from database import engine, Base, get_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理：启动建表，关闭清理"""
+    Base.metadata.create_all(bind=engine)
+    print("数据库表已就绪（users, items）")
+    yield  # 应用运行中（此处可添加关闭逻辑）
 
 app = FastAPI(
     title="LearnFast API — CRUD 实战",
     description="FastAPI 学习 Step15：完整 RESTful CRUD API + Schema 分层 + PATCH",
     version="0.1.0",
+    lifespan=lifespan
 )
 
 
-@app.on_event("startup")
-def on_startup():
-    Base.metadata.create_all(bind=engine)
 
 
 # ==============================================
@@ -45,9 +53,11 @@ def create_user(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
         3. Schema → CRUD → ORM → DB 的调用链
     """
     # 检查用户名唯一性
-    existing = crud.get_user_by_username(db, user_in.username)
-    if existing:
+    if crud.get_user_by_username(db, user_in.username):
         raise HTTPException(status_code=400, detail="用户名已存在")
+    # 检查邮箱唯一性
+    if crud.get_user_by_email(db, user_in.email):
+        raise HTTPException(status_code=400, detail="邮箱已被注册")
     return crud.create_user(db, user_in)
 
 

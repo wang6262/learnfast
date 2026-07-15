@@ -13,36 +13,47 @@
 # 注意：异步路由中所有数据库操作前都要加 await！
 # ==============================================
 import uvicorn
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy import select, func as sqlfunc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload  # 异步环境的预加载策略
 
-from .database import engine, Base, get_db
-from . import models
+from database import engine, Base, get_db
+import models
+
+
+# ==============================================
+# 生命周期：异步启动时自动建表
+# 【基础】应用启动时用异步引擎创建数据库表
+# 【进阶】lifespan + asynccontextmanager 替代 on_event：
+#   - yield 之前 = 启动逻辑，yield 之后 = 关闭逻辑
+#   - 支持真正的 async/await，比 on_event 更灵活
+# engine.begin() + run_sync() 说明：
+#   1. engine.begin() 返回异步连接
+#   2. run_sync() → 在异步引擎中执行同步的 create_all
+#      （Base.metadata.create_all 是同步的，需要 run_sync 桥接）
+# ==============================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        print("异步数据库表已就绪")
+    except Exception as e:
+        print(f"[启动失败] 数据库连接异常：{e}")
+        print("[提示] 请检查：1) PostgreSQL 是否运行  2) database.py 中连接串是否正确")
+        raise  # 重新抛出，让应用启动失败（数据库不可用时没有意义继续运行）
+    yield  # 应用运行中
 
 
 app = FastAPI(
     title="LearnFast API — 异步数据库",
     description="FastAPI 学习 Step16：async SQLAlchemy + asyncpg + 异步路由",
     version="0.1.0",
+    lifespan=lifespan,
 )
-
-
-@app.on_event("startup")
-async def on_startup():
-    """
-    异步启动事件：创建数据库表。
-    【学习知识点】
-        1. engine.begin() 返回异步连接
-        2. run_sync() → 在异步引擎中执行同步的 create_all
-           （因为 Base.metadata.create_all 是同步的，需要 run_sync 桥接）
-    """
-    async with engine.begin() as conn:
-        # run_sync 把同步的 create_all 包装成协程，在异步环境安全执行
-        await conn.run_sync(Base.metadata.create_all)
-    print("异步数据库表已就绪")
 
 
 # ==============================================
@@ -129,13 +140,12 @@ async def create_user(
         2. await db.refresh(obj) → 异步刷新（获取自增 ID）
         3. 所有写操作都要 await
     """
-    from passlib.context import CryptContext
-    pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    import bcrypt
 
     user = models.User(
         username=username,
         email=email,
-        hashed_password=pwd_ctx.hash(password),
+        hashed_password=bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
     )
     db.add(user)
     await db.commit()

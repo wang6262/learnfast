@@ -21,7 +21,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 # 【进阶】生产环境的数据库配置应从环境变量读取
 #   绝不要把真实密码硬编码在代码中（本示例仅用于学习）
 # ==============================================
-DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/learnfast"
+DATABASE_URL = "postgresql+psycopg2://postgres:123456@localhost:5432/learnfast"
 
 # ==============================================
 # 创建数据库引擎

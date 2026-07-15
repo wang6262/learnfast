@@ -15,7 +15,7 @@ from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Text, 
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func  # 数据库函数（如 now()）
 
-from .database import Base  # 从同目录的 database.py 导入模型基类
+from database import Base  # 从同目录的 database.py 导入模型基类
 
 
 # ==============================================
@@ -46,6 +46,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True, comment="用户ID")
     username = Column(String(50), unique=True, nullable=False, index=True, comment="用户名")
     email = Column(String(100), nullable=False, unique=True, comment="邮箱")
+    # phone = Column(String(20), nullable=False, unique=True, comment="电话号码")
     full_name = Column(String(100), comment="全名")
     hashed_password = Column(String(255), nullable=False, comment="bcrypt 密码哈希")
     is_active = Column(Boolean, default=True, server_default="true", comment="是否激活")

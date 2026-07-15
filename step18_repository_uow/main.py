@@ -13,6 +13,8 @@
 #   任何一层都可以独立替换和测试
 # 运行方式：uv run python -m step18_repository_uow.main
 # ==============================================
+from contextlib import asynccontextmanager
+
 import uvicorn
 from typing import Generic, TypeVar, Type
 from fastapi import FastAPI, Depends, HTTPException, status
@@ -20,7 +22,7 @@ from sqlalchemy import select, func as sqlfunc
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict
 
-from .database import engine, Base, SessionLocal, get_db
+from database import engine, Base, SessionLocal, get_db
 
 
 # ==============================================
@@ -29,7 +31,8 @@ from .database import engine, Base, SessionLocal, get_db
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from .database import Base
+from database import Base
+
 
 
 class DBUser(Base):
@@ -38,6 +41,7 @@ class DBUser(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, nullable=False)
     email = Column(String(100), nullable=False)
+    hashed_password = Column(String(255), nullable=False, default="")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -240,7 +244,12 @@ def get_uow(db: Session = Depends(get_db)) -> UnitOfWork:
     """
     return UnitOfWork(db)
 
-
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理：启动建表，关闭清理"""
+    Base.metadata.create_all(bind=engine)
+    print("数据库表已就绪（users, items）")
+    yield  # 应用运行中（此处可添加关闭逻辑）
 # ==============================================
 # 应用实例 + 路由
 # ==============================================
@@ -248,12 +257,11 @@ app = FastAPI(
     title="LearnFast API — Repository & UoW",
     description="FastAPI 学习 Step18：Repository 模式 + Unit of Work + Service 层",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 
-@app.on_event("startup")
-def on_startup():
-    Base.metadata.create_all(bind=engine)
+
 
 
 @app.post("/users/", response_model=UserResponse, status_code=status.HTTP_201_CREATED, tags=["users"])
@@ -302,4 +310,6 @@ def delete_user(user_id: int, uow: UnitOfWork = Depends(get_uow)):
 
 
 if __name__ == "__main__":
-    uvicorn.run("step18_repository_uow.main:app", host="127.0.0.1", port=8000, reload=True)
+    # 直接传入 app 对象而非模块字符串，避免 Windows spawn 机制下
+    # __main__ 和 step18_repository_uow.main 双重加载导致 SQLAlchemy 表重复定义
+    uvicorn.run(app, host="127.0.0.1", port=8000)

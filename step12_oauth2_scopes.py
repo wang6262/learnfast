@@ -36,7 +36,7 @@ from fastapi.security import (
     SecurityScopes,
 )
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from pydantic import BaseModel
 
 
@@ -54,7 +54,9 @@ SECRET_KEY = "learnfast-demo-secret-key-change-in-production-2026"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 【进阶】使用 bcrypt 直接操作，不再通过 passlib（passlib 与新版 bcrypt 不兼容）
+#   bcrypt.hashpw(明文.encode(), bcrypt.gensalt()).decode() → 生成哈希密码
+#   bcrypt.checkpw(明文.encode(), 哈希.encode()) → 校验密码是否正确
 
 # 【基础】定义本应用支持的 OAuth2 作用域
 #   key=权限代码，value=权限说明
@@ -93,7 +95,7 @@ fake_users_db = {
     "admin": {
         "username": "admin",
         "full_name": "管理员",
-        "hashed_password": pwd_context.hash("secret"),
+        "hashed_password": bcrypt.hashpw("secret".encode(), bcrypt.gensalt()).decode(),
         # 【基础】admin 拥有全部 scopes
         "scopes": ["users:read", "users:write", "users:delete", "items:read", "items:write", "admin"],
         "disabled": False,
@@ -101,7 +103,7 @@ fake_users_db = {
     "editor": {
         "username": "editor",
         "full_name": "编辑者",
-        "hashed_password": pwd_context.hash("editor123"),
+        "hashed_password": bcrypt.hashpw("editor123".encode(), bcrypt.gensalt()).decode(),
         # 【基础】editor 有读写权限，但不能删除
         "scopes": ["users:read", "items:read", "items:write"],
         "disabled": False,
@@ -109,7 +111,7 @@ fake_users_db = {
     "viewer": {
         "username": "viewer",
         "full_name": "只读用户",
-        "hashed_password": pwd_context.hash("viewer123"),
+        "hashed_password": bcrypt.hashpw("viewer123".encode(), bcrypt.gensalt()).decode(),
         # 【基础】viewer 只有查看权限
         "scopes": ["users:read", "items:read"],
         "disabled": False,
@@ -154,7 +156,7 @@ def get_user(username: str) -> UserInDB | None:
 
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
 
 
 def authenticate_user(username: str, password: str) -> UserInDB | None:

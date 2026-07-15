@@ -16,12 +16,36 @@
 # 验证：启动后访问 http://127.0.0.1:8000/docs 测试 CRUD 接口
 # ==============================================
 import uvicorn
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .database import engine, Base, SessionLocal, get_db
-from .models import User, Item
+from database import engine, Base, get_db
+from models import User, Item
+
+
+# ==============================================
+# 生命周期：启动时自动建表
+# 【基础】应用启动时，根据 ORM 模型自动创建数据库表
+#   如果表已存在，不会重复创建（不会覆盖已有数据）
+# 【进阶】lifespan 替代 on_event（FastAPI 新版推荐方式）：
+#   - asynccontextmanager 将 async 生成器转为上下文管理器
+#   - yield 之前 = 启动逻辑，yield 之后 = 关闭逻辑
+#   - 相比 on_event：支持异步、逻辑内聚、更易测试
+#   Base.metadata.create_all() 的工作原理：
+#   1. 扫描所有继承 Base 的类
+#   2. 读取 Column 定义，生成对应的 CREATE TABLE SQL
+#   3. 按外键依赖顺序执行（users 先于 items 创建）
+#   4. 如果表已存在则跳过（不覆盖数据，只创建缺失的表）
+#   这种方式适合开发环境，生产环境用 Alembic 迁移（Step17）
+# ==============================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理：启动建表，关闭清理"""
+    Base.metadata.create_all(bind=engine)
+    print("数据库表已就绪（users, items）")
+    yield  # 应用运行中（此处可添加关闭逻辑）
 
 
 # ==============================================
@@ -31,25 +55,8 @@ app = FastAPI(
     title="LearnFast API — SQLAlchemy 同步",
     description="FastAPI 学习 Step14：SQLAlchemy ORM + PostgreSQL CRUD",
     version="0.1.0",
+    lifespan=lifespan,
 )
-
-
-# ==============================================
-# 启动事件：自动建表
-# 【基础】应用启动时，根据 ORM 模型自动创建数据库表
-#   如果表已存在，不会重复创建（不会覆盖已有数据）
-# 【进阶】Base.metadata.create_all() 的工作原理：
-#   1. 扫描所有继承 Base 的类
-#   2. 读取 Column 定义，生成对应的 CREATE TABLE SQL
-#   3. 按外键依赖顺序执行（users 先于 items 创建）
-#   4. 如果表已存在则跳过（不覆盖数据，只创建缺失的表）
-#   这种方式适合开发环境，生产环境用 Alembic 迁移（Step17）
-# ==============================================
-@app.on_event("startup")
-def on_startup():
-    """应用启动时创建数据库表"""
-    Base.metadata.create_all(bind=engine)
-    print("数据库表已就绪（users, items）")
 
 
 # ==============================================
@@ -76,13 +83,12 @@ def create_user(
         curl -X POST "http://127.0.0.1:8000/users/?username=alice&email=alice@test.com&full_name=Alice"
     """
     # 【基础】创建 ORM 对象（此时还不在数据库中）
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    import bcrypt
     user = User(
         username=username,
         email=email,
         full_name=full_name,
-        hashed_password=pwd_context.hash(password),
+        hashed_password=bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
     )
     # 【基础】添加到会话（标记为待插入）
     db.add(user)

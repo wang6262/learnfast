@@ -37,7 +37,7 @@ from enum import Enum
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 
@@ -95,7 +95,7 @@ SECRET_KEY = "learnfast-demo-secret-key-rbac-2026"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 【进阶】使用 bcrypt 直接操作，不再通过 passlib（passlib 与新版 bcrypt 不兼容）
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
 
@@ -107,21 +107,21 @@ fake_users_db = {
         "username": "admin",
         "full_name": "系统管理员",
         "role": Role.ADMIN,
-        "hashed_password": pwd_context.hash("secret"),
+        "hashed_password": bcrypt.hashpw("secret".encode(), bcrypt.gensalt()).decode(),
         "disabled": False,
     },
     "editor": {
         "username": "editor",
         "full_name": "内容编辑",
         "role": Role.EDITOR,
-        "hashed_password": pwd_context.hash("edit123"),
+        "hashed_password": bcrypt.hashpw("edit123".encode(), bcrypt.gensalt()).decode(),
         "disabled": False,
     },
     "viewer": {
         "username": "viewer",
         "full_name": "访客",
         "role": Role.VIEWER,
-        "hashed_password": pwd_context.hash("view123"),
+        "hashed_password": bcrypt.hashpw("view123".encode(), bcrypt.gensalt()).decode(),
         "disabled": False,
     },
 }
@@ -172,7 +172,7 @@ def get_user(username: str):
 
 def authenticate_user(username: str, password: str):
     user = get_user(username)
-    if not user or not pwd_context.verify(password, user.hashed_password):
+    if not user or not bcrypt.checkpw(password.encode(), user.hashed_password.encode()):
         return None
     return user
 
@@ -259,18 +259,21 @@ class PermissionChecker:
         # 【进阶】类可以维护状态——本示例记录检查次数（实际项目可记录审计日志）
         self.access_count = 0
 
-    async def __call__(self, current_user: User = Depends(get_current_user)) -> User:
+    async def __call__(self, current_user: User = Depends(get_current_user)):
         """
         当 Depends(PermissionChecker(Role.ADMIN)) 时，
         FastAPI 会调用这个 __call__ 方法，并注入 Depends(get_current_user) 的结果。
+        返回 self（PermissionChecker 实例）而非 current_user，
+        以便路由函数可以访问类的状态（如 access_count）。
         """
         self.access_count += 1
+        self.current_user = current_user  # 保存用户信息，方便路由函数使用
         if not has_role(current_user.role, self.required_role):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"权限不足：需要 {self.required_role.value} 或更高角色",
             )
-        return current_user
+        return self  # 返回类实例，路由函数可以访问 access_count 等状态
 
 
 # --- 方式 3：路由级别声明（dependencies 参数）---

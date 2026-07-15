@@ -17,7 +17,7 @@ from sqlalchemy.orm import declarative_base
 #   asyncpg — 纯 Python asyncio 驱动，性能极高（准备语句缓存、二进制协议）
 #   psycopg2 — C 扩展同步驱动，Python 生态最成熟
 #   选择：异步路由（async def）用 asyncpg，同步路由用 psycopg2
-DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/learnfast"
+DATABASE_URL = "postgresql+asyncpg://postgres:123456@localhost:5432/learnfast"
 
 # 【基础】create_async_engine 创建异步引擎
 # 【进阶】async engine 内部使用 asyncio 连接池，不用传统的 QueuePool

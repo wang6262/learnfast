@@ -12,10 +12,8 @@ from typing import Type, TypeVar
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from . import models, schemas
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import models, schemas
+import bcrypt
 
 # TypeVar 用于泛型类型提示
 ModelType = TypeVar("ModelType")
@@ -42,6 +40,11 @@ def get_user_by_username(db: Session, username: str) -> models.User | None:
     return db.query(models.User).filter(models.User.username == username).first()
 
 
+def get_user_by_email(db: Session, email: str) -> models.User | None:
+    """按邮箱查询用户（用于创建前检查邮箱唯一性）"""
+    return db.query(models.User).filter(models.User.email == email).first()
+
+
 def get_users(db: Session, skip: int = 0, limit: int = 100) -> list[models.User]:
     """分页查询所有用户"""
     return db.query(models.User).offset(skip).limit(limit).all()
@@ -60,7 +63,7 @@ def create_user(db: Session, user_in: schemas.UserCreate) -> models.User:
         username=user_in.username,
         email=user_in.email,
         full_name=user_in.full_name,
-        hashed_password=pwd_context.hash(user_in.password),
+        hashed_password=bcrypt.hashpw(user_in.password.encode(), bcrypt.gensalt()).decode(),
     )
     db.add(user)
     db.commit()
@@ -82,7 +85,7 @@ def update_user(db: Session, user: models.User, user_in: schemas.UserUpdate) -> 
 
     # 如果更新了密码，先哈希
     if "password" in update_data:
-        update_data["hashed_password"] = pwd_context.hash(update_data.pop("password"))
+        update_data["hashed_password"] = bcrypt.hashpw(update_data.pop("password").encode(), bcrypt.gensalt()).decode()
 
     # 【基础】遍历更新字段，用 setattr 动态设置 ORM 对象属性
     for field, value in update_data.items():
